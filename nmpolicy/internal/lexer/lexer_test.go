@@ -40,6 +40,10 @@ func TestLexer(t *testing.T) {
 	testLinuxBridgeAtDefaultGwScenario(t)
 }
 
+func FuzzLexer(f *testing.F) {
+	fuzzBasicExpressions(f)
+}
+
 func testBasicExpressions(t *testing.T) {
 	t.Run("basic expressions", func(t *testing.T) {
 		runTest(t, []test{
@@ -120,6 +124,18 @@ func testBasicExpressions(t *testing.T) {
 				{10, lexer.EOF, ""}},
 			}},
 		})
+	})
+}
+
+func fuzzBasicExpressions(f *testing.F) {
+	runFuzz(f, []string{
+		"    ",
+		"    31    03   ",
+		` "foobar1" "foo 1 bar"    " foo bar - " ' bar foo' 789 "" `,
+		" foo f1-o-o fo-o-o1  ",
+		" . foo1.dar1.0.dar2:=foo3 . dar3 ... moo3+boo3|doo3",
+		" . foo1.dar1:=foo2 . dar2 ... moo3+boo3|doo3 == := :=",
+		"foo1.3|foo2",
 	})
 }
 
@@ -303,4 +319,13 @@ func runTest(t *testing.T, tests []test) {
 			}
 		})
 	}
+}
+
+func runFuzz(f *testing.F, tests []string) {
+	for _, test := range tests {
+		f.Add(test) // Use f.Add to provide a seed corpus
+	}
+	f.Fuzz(func(t *testing.T, expression string) {
+		lexer.New().Lex(expression)
+	})
 }
