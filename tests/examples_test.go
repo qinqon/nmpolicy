@@ -27,7 +27,6 @@ import (
 
 	"sigs.k8s.io/yaml"
 
-	"github.com/nmstate/nmpolicy/nmpolicy"
 	"github.com/nmstate/nmpolicy/nmpolicy/types"
 	"github.com/nmstate/nmpolicy/nmpolicy/types/typestest"
 )
@@ -44,8 +43,12 @@ type example struct {
 	capturedStates map[string]types.CaptureState
 }
 
+func (e *example) composeFilePath(fileName string) string {
+	return filepath.Join(examplesPath, e.name, fileName)
+}
+
 func (e *example) readFile(fileName string) ([]byte, error) {
-	return os.ReadFile(filepath.Join(examplesPath, e.name, fileName))
+	return os.ReadFile(e.composeFilePath(fileName))
 }
 
 func (e *example) load() error {
@@ -79,8 +82,22 @@ func (e *example) load() error {
 	return nil
 }
 
-func (e *example) run() (types.GeneratedState, error) {
-	obtained, err := nmpolicy.GenerateState(e.policy, e.currentState, types.CachedState{})
+func (e *example) run(t *testing.T) (types.GeneratedState, error) {
+	capturedCacheFile := capturedStates(t)
+	obtainedState, err := nmpolicyctl(e.composeFilePath("current.yaml"), "gen", e.composeFilePath("policy.yaml"), "-o", capturedCacheFile)
+	if err != nil {
+		return types.GeneratedState{}, err
+	}
+	obtained := types.GeneratedState{}
+	err = yaml.Unmarshal(obtainedState, &obtained.DesiredState)
+	if err != nil {
+		return types.GeneratedState{}, err
+	}
+	capturedCache, err := os.ReadFile(capturedCacheFile)
+	if err != nil {
+		return types.GeneratedState{}, err
+	}
+	err = yaml.Unmarshal(capturedCache, &obtained.Cache)
 	if err != nil {
 		return types.GeneratedState{}, err
 	}
@@ -98,7 +115,7 @@ func TestExamples(t *testing.T) {
 		t.Run(e.name, func(t *testing.T) {
 			err := e.load()
 			assert.NoError(t, err, "should successfully load the example")
-			obtained, err := e.run()
+			obtained, err := e.run(t)
 			assert.NoError(t, err, "should successfully run the example")
 			assert.YAMLEq(t, string(e.generatedState), string(obtained.DesiredState))
 			expectedCapturedStates, err := formatCapturedStates(e.capturedStates)
